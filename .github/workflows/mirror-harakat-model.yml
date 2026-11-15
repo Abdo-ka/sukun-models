@@ -1,0 +1,25 @@
+name: Mirror harakat model
+on: workflow_dispatch
+permissions:
+  contents: write
+jobs:
+  mirror:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download from Hugging Face
+        run: |
+          B=https://huggingface.co/Muno459/fastconformer-quran/resolve/main
+          for f in onnx/model.q8.onnx tokens.txt tokenizer.model LICENSE; do
+            curl -fsSL "$B/$f" -o "$(basename $f)"
+          done
+          mv model.q8.onnx harakat_ctc_q8.onnx
+          sha256sum * > SHA256SUMS
+          ls -l
+      - name: Publish release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create tarteel-harakat-model-v1 harakat_ctc_q8.onnx tokens.txt tokenizer.model LICENSE SHA256SUMS \
+            -R "$GITHUB_REPOSITORY" \
+            -t "Tarteel harakat model v1" \
+            -n "Mirror of Muno459/fastconformer-quran (Quran-Lab No-Profit License 1.1, see LICENSE). Non-profit use only."
