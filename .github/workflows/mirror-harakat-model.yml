@@ -22,7 +22,8 @@ jobs:
           mkdir out
           python tools/export_harakat.py model.nemo fp32.onnx out/vocab.json
           # Only MatMul weights: quantizing the convolutions (STFT basis included) ruins the output.
-          python -c "from onnxruntime.quantization import quantize_dynamic, QuantType; quantize_dynamic('fp32.onnx', 'out/fastconformer_harakat_int8.onnx', weight_type=QuantType.QInt8, per_channel=True, op_types_to_quantize=['MatMul'])"
+          # Unsigned weights: signed int8 saturates on x86 CPUs without VNNI.
+          python -c "from onnxruntime.quantization import quantize_dynamic, QuantType; quantize_dynamic('fp32.onnx', 'out/fastconformer_harakat_int8.onnx', weight_type=QuantType.QUInt8, per_channel=True, op_types_to_quantize=['MatMul'])"
       - name: Check int8 hears what fp32 hears (Al-Fatiha, Al-Ikhlas)
         run: |
           sudo apt-get install -y -qq ffmpeg
