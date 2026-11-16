@@ -1,0 +1,25 @@
+name: Try smaller harakat model
+on: workflow_dispatch
+jobs:
+  try:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - run: |
+          pip install torch torchaudio --index-url https://download.pytorch.org/whl/cpu
+          pip install "nemo_toolkit[asr]" onnx onnxruntime
+      - run: curl -fsSL -o model.nemo https://huggingface.co/mohammed/fastconformer-quran-ar/resolve/main/phase3_full/phase3_full_wer0.0014.nemo
+      - run: python tools/export_harakat.py model.nemo fp32.onnx vocab.json && python tools/quantize_variants.py && ls -l *.onnx
+      - run: |
+          sudo apt-get install -y -qq ffmpeg
+          for a in 001001 001002 001003 001004 001005 001006 001007 112001 112002 112003 112004; do
+            curl -fsSL -o $a.mp3 https://everyayah.com/data/Alafasy_128kbps/$a.mp3
+            ffmpeg -loglevel error -i $a.mp3 -ac 1 -ar 16000 -f f32le $a.raw
+            for m in fp32 conv_int8 int4; do
+              echo "$a $m: $(python tools/check_harakat.py $m.onnx vocab.json $a.raw 2>/dev/null | sed 's/^.*-> //')"
+            done
+          done
