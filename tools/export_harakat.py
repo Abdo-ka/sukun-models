@@ -56,8 +56,9 @@ class Graph(torch.nn.Module):
 
 vocab_size = model.tokenizer.vocab_size
 assert vocab_size == 1024, f"engine expects 1024 pieces + blank, got {vocab_size}"
-json.dump({str(i): model.tokenizer.ids_to_tokens([i])[0] for i in range(vocab_size)},
-          open(out_vocab, "w", encoding="utf8"), ensure_ascii=False)
+vocabulary = {str(i): model.tokenizer.ids_to_tokens([i])[0] for i in range(vocab_size)}
+vocabulary[str(vocab_size)] = "<blank>"  # the engine reads all 1025 CTC classes
+json.dump(vocabulary, open(out_vocab, "w", encoding="utf8"), ensure_ascii=False)
 
 audio = torch.zeros(1, 16000 * 5)
 with torch.no_grad():
