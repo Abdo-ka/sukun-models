@@ -21,16 +21,21 @@ jobs:
         run: |
           mkdir out
           python tools/export_harakat.py model.nemo fp32.onnx out/vocab.json
-          python -c "from onnxruntime.quantization import quantize_dynamic, QuantType; quantize_dynamic('fp32.onnx', 'out/fastconformer_harakat_int8.onnx', weight_type=QuantType.QInt8)"
-      - name: Check decode keeps tashkeel (Al-Fatiha 1:1-1:2)
+          # Only MatMul weights: quantizing the convolutions (STFT basis included) ruins the output.
+          python -c "from onnxruntime.quantization import quantize_dynamic, QuantType; quantize_dynamic('fp32.onnx', 'out/fastconformer_harakat_int8.onnx', weight_type=QuantType.QInt8, per_channel=True, op_types_to_quantize=['MatMul'])"
+      - name: Check int8 matches fp32 (Al-Fatiha, Al-Ikhlas)
         run: |
           sudo apt-get install -y -qq ffmpeg
-          for a in 001001 001002; do
+          for a in 001001 001002 001003 001004 001005 001006 001007 112001 112002 112003 112004; do
             curl -fsSL -o $a.mp3 https://everyayah.com/data/Alafasy_128kbps/$a.mp3
             ffmpeg -loglevel error -i $a.mp3 -ac 1 -ar 16000 -f f32le $a.raw
-            python tools/check_harakat.py fp32.onnx out/vocab.json $a.raw
-            python tools/check_harakat.py out/fastconformer_harakat_int8.onnx out/vocab.json $a.raw
+            f=$(python tools/check_harakat.py fp32.onnx out/vocab.json $a.raw | sed 's/^.*-> //')
+            q=$(python tools/check_harakat.py out/fastconformer_harakat_int8.onnx out/vocab.json $a.raw | sed 's/^.*-> //')
+            echo "$a fp32: $f"
+            echo "$a int8: $q"
+            [ "$f" = "$q" ] || echo "$a" >> mismatches
           done
+          if [ -f mismatches ]; then echo "int8 differs on: $(cat mismatches | tr '\n' ' ')"; exit 1; fi
       - name: Publish release
         env:
           GH_TOKEN: ${{ github.token }}
@@ -39,6 +44,7 @@ jobs:
           printf 'Model: mohammed/fastconformer-quran-ar (phase3_full), CC-BY-4.0\nhttps://huggingface.co/mohammed/fastconformer-quran-ar\nConverted to ONNX (CTC branch) and int8-quantized for Sukun.\n' > ATTRIBUTION.txt
           sha256sum * > SHA256SUMS
           ls -l
+          gh release delete tarteel-harakat-model-v1 -R "$GITHUB_REPOSITORY" --yes --cleanup-tag || true
           gh release create tarteel-harakat-model-v1 * -R "$GITHUB_REPOSITORY" \
             -t "Tarteel harakat model v1" \
             -n "FastConformer Quran (with tashkeel) by mohammed, CC-BY-4.0. ONNX CTC export, int8. See ATTRIBUTION.txt."
