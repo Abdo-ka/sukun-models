@@ -19,7 +19,13 @@ jobs:
           for a in 001001 001002 001003 001004 001005 001006 001007 112001 112002 112003 112004; do
             curl -fsSL -o $a.mp3 https://everyayah.com/data/Alafasy_128kbps/$a.mp3
             ffmpeg -loglevel error -i $a.mp3 -ac 1 -ar 16000 -f f32le $a.raw
-            for m in fp32 conv_int8 int4; do
+            for m in fp32 conv_int8; do
               echo "$a $m: $(python tools/check_harakat.py $m.onnx vocab.json $a.raw 2>/dev/null | sed 's/^.*-> //')"
             done
+          done
+      - name: Lossless compression of the published model
+        run: |
+          curl -fsSL -o published.onnx https://github.com/Abdo-ka/sukun-models/releases/download/tarteel-harakat-model-v1/fastconformer_harakat_int8.onnx
+          for f in published.onnx conv_int8.onnx; do
+            echo "size $f raw=$(stat -c%s $f) zstd19=$(zstd -19 -T0 -c $f | wc -c) gzip9=$(gzip -9 -c $f | wc -c)"
           done
